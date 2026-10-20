@@ -1,0 +1,42 @@
+name: arca-notifier
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # 5분마다 (GitHub 최소 간격. 실제로는 몇 분씩 늦어질 수 있음)
+  workflow_dispatch:         # Actions 탭에서 수동 실행 버튼
+
+permissions:
+  contents: write            # 본 글 기록(arca_seen.json)을 저장소에 커밋하기 위해 필요
+
+concurrency:
+  group: arca-notifier
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Check arca.live
+        run: python arca_notifier.py --once
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ARCA_CHANNEL: ${{ secrets.ARCA_CHANNEL }}
+          ARCA_KEYWORDS: ${{ secrets.ARCA_KEYWORDS }}
+          ARCA_SEARCH_CONTENT: "false"
+
+      - name: Save seen posts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add arca_seen.json
+          git diff --cached --quiet || (git commit -m "update seen posts [skip ci]" && git push)
